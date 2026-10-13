@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaggle Qwen — міст</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --ink:#15181d; --muted:#667085; --line:#e5e8ee;
+    --me:#2563eb; --me-ink:#fff; --bot:#eef1f6; --accent:#2563eb;
+    --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#0e1116; --panel:#161b22; --ink:#e6edf3; --muted:#8b949e; --line:#2a2f37;
+    --me:#2f6fed; --me-ink:#fff; --bot:#1c2129; --accent:#4b8bf4;
+  }}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif;height:100dvh;display:flex;flex-direction:column}
+  header{padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  h1{font-size:15px;margin:0;font-weight:650;letter-spacing:.2px}
+  .pills{display:flex;gap:12px;flex-wrap:wrap;margin-left:auto;font-size:12.5px;color:var(--muted)}
+  .pill{display:flex;align-items:center;gap:6px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;
+    box-shadow:0 0 0 0 transparent;transition:background .3s}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+  .model{font-size:12.5px;color:var(--muted)}
+  #banner{display:none;padding:9px 16px;background:#fff6ed;color:#9a3412;font-size:13px;
+    border-bottom:1px solid var(--line)}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #banner{background:#2a1c10;color:#f0b37e}}
+  #log{flex:1;overflow:auto;padding:18px 16px;display:flex;flex-direction:column;gap:12px}
+  .row{display:flex} .row.me{justify-content:flex-end}
+  .bubble{max-width:min(720px,88%);padding:9px 13px;border-radius:14px;white-space:pre-wrap;
+    word-wrap:break-word;overflow-wrap:anywhere}
+  .me .bubble{background:var(--me);color:var(--me-ink);border-bottom-right-radius:4px}
+  .bot .bubble{background:var(--bot);border-bottom-left-radius:4px}
+  .bot .bubble.think{color:var(--muted)}
+  footer{border-top:1px solid var(--line);background:var(--panel);padding:10px 16px}
+  .box{max-width:860px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
+  textarea{flex:1;resize:none;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+    font:inherit;background:var(--bg);color:var(--ink);max-height:160px}
+  textarea:focus{outline:2px solid var(--accent);border-color:transparent}
+  button{border:0;border-radius:10px;padding:0 18px;height:42px;background:var(--accent);color:#fff;
+    font:inherit;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  .hint{max-width:860px;margin:6px auto 0;font-size:11.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Kaggle&nbsp;Qwen</h1>
+  <span class="model" id="model">—</span>
+  <div class="pills">
+    <span class="pill"><span class="dot" id="d-bridge"></span>міст</span>
+    <span class="pill"><span class="dot" id="d-gw"></span>шлюз&nbsp;/&nbsp;інтернет</span>
+    <span class="pill"><span class="dot" id="d-kernel"></span>ядро&nbsp;Kaggle</span>
+  </div>
+</header>
+<div id="banner"></div>
+<div id="log"></div>
+<footer>
+  <div class="box">
+    <textarea id="inp" rows="1" placeholder="Напиши запит і натисни Enter…"></textarea>
+    <button id="send">Надіслати</button>
+  </div>
+  <div class="hint">Enter — надіслати, Shift+Enter — новий рядок. Відповідає Qwen на Kaggle через локальний міст (127.0.0.1:11434).</div>
+</footer>
+<script>
+const $=id=>document.getElementById(id);
+const log=$("log"), inp=$("inp"), send=$("send"), banner=$("banner");
+let model="qwen3-coder:30b", busy=false;
+const history=[];                      // {role, content} для контексту
+
+function setDot(el,cls,title){el.className="dot "+(cls||"");el.parentElement.title=title||""}
+
+async function poll(){
+  try{
+    const s=await (await fetch("/__bridge/status",{cache:"no-store"})).json();
+    setDot($("d-bridge"),"ok","міст працює");
+    if(s.model){model=s.model;$("model").textContent=s.model}
+    if(s.kernel==="online"){
+      setDot($("d-gw"),"ok","шлюз і інтернет ок");
+      setDot($("d-kernel"),"ok","ядро онлайн");
+      banner.style.display="none";
+    }else if(s.kernel==="offline"){
+      setDot($("d-gw"),"ok","шлюз ок");
+      setDot($("d-kernel"),"warn","ядро спить");
+      showBanner("💤 Ядро Kaggle спить. Підніми сесію: <code>kaggle_llm.py start</code> (~5–6 хв), тоді онови.");
+    }else if(s.kernel==="unreachable"){
+      setDot($("d-gw"),"bad","шлюз/інтернет недоступні");
+      setDot($("d-kernel"),"bad","");
+      showBanner("⚠ Немає зв'язку зі шлюзом (інтернет/VPN?). "+(s.detail||""));
+    }else{
+      setDot($("d-gw"),"warn",s.detail||"");
+      setDot($("d-kernel"),"warn",s.detail||"");
+      showBanner("⚠ "+(s.detail||("стан: "+s.kernel)));
+    }
+  }catch(e){
+    setDot($("d-bridge"),"bad","міст не відповідає");
+    setDot($("d-gw"),"","");setDot($("d-kernel"),"","");
+    showBanner("⚠ Міст не відповідає. Запусти start_bridge.bat і лиши вікно відкритим.");
+  }
+}
+function showBanner(html){banner.innerHTML=html;banner.style.display="block"}
+
+function addRow(role,text){
+  const row=document.createElement("div");row.className="row "+role;
+  const b=document.createElement("div");b.className="bubble";b.textContent=text;
+  row.appendChild(b);log.appendChild(row);log.scrollTop=log.scrollHeight;return b;
+}
+
+async function ask(){
+  const text=inp.value.trim();
+  if(!text||busy)return;
+  busy=true;send.disabled=true;inp.value="";inp.style.height="auto";
+  addRow("me",text);history.push({role:"user",content:text});
+  const b=addRow("bot","");b.classList.add("think");b.textContent="…";
+  let acc="";
+  try{
+    const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model,messages:history,stream:true})});
+    if(r.status===503){b.classList.remove("think");b.textContent="💤 Ядро Kaggle спить — підніми kaggle_llm.py start і спробуй знову.";busy=false;send.disabled=false;return}
+    if(!r.ok){b.classList.remove("think");b.textContent="Помилка "+r.status;busy=false;send.disabled=false;return}
+    const reader=r.body.getReader(),dec=new TextDecoder();let buf="";
+    for(;;){
+      const {value,done}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      let nl;while((nl=buf.indexOf("\n"))>=0){
+        const line=buf.slice(0,nl).trim();buf=buf.slice(nl+1);
+        if(!line)continue;
+        try{const j=JSON.parse(line);const c=(j.message&&j.message.content)||"";
+          if(c){acc+=c;b.classList.remove("think");b.textContent=acc;log.scrollTop=log.scrollHeight}}catch(_){}
+      }
+    }
+    history.push({role:"assistant",content:acc});
+  }catch(e){b.classList.remove("think");b.textContent="Збій зв'язку: "+e}
+  busy=false;send.disabled=false;inp.focus();
+}
+
+send.onclick=ask;
+inp.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();ask()}});
+inp.addEventListener("input",()=>{inp.style.height="auto";inp.style.height=Math.min(160,inp.scrollHeight)+"px"});
+poll();setInterval(poll,5000);inp.focus();
+</script>
+</body>
+</html>

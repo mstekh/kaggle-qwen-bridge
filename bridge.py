@@ -227,7 +227,72 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return True
+        if self.command == "GET" and self.path == "/__bridge/status":
+            body = json.dumps(self._bridge_status()).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return True
+        if self.command in ("GET", "HEAD") and self.path.rstrip("/") == "/ui":
+            path = os.path.join(HERE, "ui.html")
+            try:
+                with open(path, "rb") as f:
+                    body = f.read()
+            except OSError:
+                body = b"<h1>ui.html not found</h1>"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if self.command == "GET":
+                self.wfile.write(body)
+            return True
         return False
+
+    def _ctx_for(self, target):
+        """SSL-контекст для апстріму: приватний CA шлюзу або вимкнена перевірка."""
+        if not target.startswith("https"):
+            return None
+        if not self.cfg.get("verify_tls", True):
+            return ssl._create_unverified_context()
+        cafile = self.resolver.cafile or self.cfg.get("upstream_cafile")
+        if cafile:
+            return ssl.create_default_context(cafile=cafile)
+        return None
+
+    def _bridge_status(self):
+        """Жива перевірка всього ланцюга для веб-UI: міст -> шлюз -> ядро Kaggle."""
+        target = self.resolver.url
+        out = {"bridge": True, "target": target, "kernel": "unknown",
+               "model": None, "detail": None}
+        if not target:
+            out["kernel"] = "no-target"
+            out["detail"] = "немає цільового URL (перевір config.json)"
+            return out
+        try:
+            req = urllib.request.Request(target + "/api/tags", method="GET")
+            token = self.resolver.token or self.cfg.get("upstream_bearer")
+            if token:
+                req.add_header("Authorization", f"Bearer {token}")
+            with urllib.request.urlopen(req, timeout=8,
+                                        context=self._ctx_for(target)) as r:
+                data = json.loads(r.read())
+            models = [m.get("name") for m in data.get("models", [])]
+            out["kernel"] = "online" if models else "online-empty"
+            out["model"] = models[0] if models else None
+        except urllib.error.HTTPError as e:
+            if e.code == 503:
+                out["kernel"] = "offline"
+                out["detail"] = "ядро Kaggle спить — підніми: kaggle_llm.py start"
+            else:
+                out["kernel"] = "error"
+                out["detail"] = f"шлюз відповів {e.code}"
+        except Exception as e:
+            out["kernel"] = "unreachable"
+            out["detail"] = f"шлюз/інтернет недоступні: {e}"
+        return out
 
     def _read_body(self):
         length = self.headers.get("Content-Length")
@@ -280,15 +345,7 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         if not target:
             return self._error(503, "no Kaggle target URL yet (registry empty)")
 
-        ctx = None
-        if target.startswith("https"):
-            if not self.cfg.get("verify_tls", True):
-                ctx = ssl._create_unverified_context()
-            else:
-                cafile = self.resolver.cafile or self.cfg.get("upstream_cafile")
-                if cafile:
-                    # приватний CA шлюзу (сертифікат виданий не публічним УЦ)
-                    ctx = ssl.create_default_context(cafile=cafile)
+        ctx = self._ctx_for(target)
 
         attempts = 0
         while attempts < 2:
