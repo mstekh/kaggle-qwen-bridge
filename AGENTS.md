@@ -24,13 +24,11 @@ Ollama/OpenAI endpoint `127.0.0.1:11434`, що проксіює на поточ�
   CA у `~/.config/kagent/ca.crt`. Додано через `kagent_gateway.py add-client bbeast`.
 - Старт моделі: `python <ckb>/tools/kaggle_llm.py start` (gateway-режим авто, бо є config.json).
 
-## Два акаунти Kaggle (пояснено)
-- **`mykolasych`** — акаунт **шлюзу** на VPS (`/var/lib/kagent/.kaggle/access_token`); під нього
-  й захардкоджений `SERVE_ID = mykolasych/claude-kaggle-serve` у dispatch.py — там усе узгоджено.
-- **`micmikolus`** — локальний токен bbeast (`~/.kaggle/access_token`), CLI
-  `~/AppData/Roaming/Python/Python312/Scripts/kaggle.exe`. Для ПРЯМОГО запуску з bbeast треба
-  робоча копія з `SERVE_ID=micmikolus/...`, але прямий шлях усе одно блокує мережа — тож
-  актуальний лише gateway-шлях (mykolasych).
+## Акаунт Kaggle
+- **`micmikolus`** — єдиний акаунт (інші забанено й прибрано 2026-11-11): і на шлюзі VPS
+  (`/var/lib/kagent/accounts/micmikolus/access_token`, `SERVE_ID = micmikolus/claude-kaggle-serve`),
+  і локально на bbeast (`~/.kaggle/access_token`, CLI `~/AppData/Roaming/Python/Python312/Scripts/kaggle.exe`).
+  Прямий шлях з bbeast блокує мережа — актуальний лише gateway-шлях.
 
 ## Локальний ollama CLI
 - Локальний `ollama.exe` старий (0.33.1) проти сервера 0.40.3 — для `list`/`run` через міст
