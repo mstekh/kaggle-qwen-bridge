@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaggle Qwen — міст</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --ink:#15181d; --muted:#667085; --line:#e5e8ee;
+    --me:#2563eb; --me-ink:#fff; --bot:#eef1f6; --accent:#2563eb;
+    --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#0e1116; --panel:#161b22; --ink:#e6edf3; --muted:#8b949e; --line:#2a2f37;
+    --me:#2f6fed; --me-ink:#fff; --bot:#1c2129; --accent:#4b8bf4;
+  }}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif;height:100dvh;display:flex;flex-direction:column}
+  header{padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  h1{font-size:15px;margin:0;font-weight:650;letter-spacing:.2px}
+  .pills{display:flex;gap:12px;flex-wrap:wrap;margin-left:auto;font-size:12.5px;color:var(--muted)}
+  .pill{display:flex;align-items:center;gap:6px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;
+    box-shadow:0 0 0 0 transparent;transition:background .3s}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+  .model{font-size:12.5px;color:var(--muted)}
+  #banner{display:none;padding:9px 16px;background:#fff6ed;color:#9a3412;font-size:13px;
+    border-bottom:1px solid var(--line)}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #banner{background:#2a1c10;color:#f0b37e}}
+  #log{flex:1;overflow:auto;padding:18px 16px;display:flex;flex-direction:column;gap:12px}
+  .row{display:flex} .row.me{justify-content:flex-end}
+  .bubble{max-width:min(720px,88%);padding:9px 13px;border-radius:14px;white-space:pre-wrap;
+    word-wrap:break-word;overflow-wrap:anywhere}
+  .me .bubble{background:var(--me);color:var(--me-ink);border-bottom-right-radius:4px}
+  .bot .bubble{background:var(--bot);border-bottom-left-radius:4px}
+  .bot .bubble.think{color:var(--muted)}
+  footer{border-top:1px solid var(--line);background:var(--panel);padding:10px 16px}
+  .box{max-width:860px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
+  textarea{flex:1;resize:none;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+    font:inherit;background:var(--bg);color:var(--ink);max-height:160px}
+  textarea:focus{outline:2px solid var(--accent);border-color:transparent}
+  button{border:0;border-radius:10px;padding:0 18px;height:42px;background:var(--accent);color:#fff;
+    font:inherit;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  .hint{max-width:860px;margin:6px auto 0;font-size:11.5px;color:var(--muted)}
+  #warm{display:none;position:fixed;inset:0;z-index:20;background:var(--bg);align-items:center;justify-content:center;padding:16px}
+  #warm.show{display:flex}
+  .card{width:min(460px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px 24px;text-align:center}
+  .card h2{margin:0 0 6px;font-size:20px}
+  .card p{margin:0 0 18px;color:var(--muted);font-size:14px}
+  #warmBtn{height:50px;width:100%;font-size:16px;border-radius:12px}
+  .bar{height:10px;background:var(--bot);border-radius:6px;overflow:hidden;margin:18px 0 8px;display:none}
+  .bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .8s linear}
+  #warmTime{font-variant-numeric:tabular-nums;font-size:26px;font-weight:650;display:none}
+  #warmState{font-size:13px;color:var(--muted);min-height:18px;margin-top:4px}
+  #warmLog{margin-top:12px;text-align:left;font:11.5px/1.5 ui-monospace,Consolas,monospace;color:var(--muted);
+    max-height:86px;overflow:hidden;white-space:pre-wrap;display:none}
+  .skip{margin-top:14px;background:none;color:var(--muted);height:auto;padding:4px 8px;font-weight:400;font-size:12.5px;text-decoration:underline}
+  #mode{height:40px;border-radius:10px;border:1px solid var(--line,#444);background:var(--card,#222);color:inherit;padding:0 8px;font:inherit}
+  .mic{min-width:44px;background:var(--card,#222);color:inherit;border:1px solid var(--line,#444)}
+  .mic.on{background:#c0392b;color:#fff;animation:pulse 1.2s infinite}
+  @keyframes pulse{50%{opacity:.6}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Kaggle&nbsp;Qwen</h1>
+  <span class="model" id="model">—</span>
+  <div class="pills">
+    <span class="pill"><span class="dot" id="d-bridge"></span>міст</span>
+    <span class="pill"><span class="dot" id="d-gw"></span>шлюз&nbsp;/&nbsp;інтернет</span>
+    <span class="pill"><span class="dot" id="d-kernel"></span>ядро&nbsp;Kaggle</span>
+  </div>
+</header>
+<div id="banner"></div>
+<div id="warm">
+  <div class="card">
+    <h2 id="warmTitle">💤 Модель спить</h2>
+    <p id="warmText">Qwen на Kaggle вимкнена, щоб не витрачати квоту GPU. Розігрів займає близько шести хвилин.</p>
+    <button id="warmBtn">🔥 Розігріти</button>
+    <div class="bar" id="warmBar"><i id="warmFill"></i></div>
+    <div id="warmTime">00:00</div>
+    <div id="warmState"></div>
+    <div id="warmLog"></div>
+    <button class="skip" id="warmHide">Приховати екран</button>
+  </div>
+</div>
+<div id="log"></div>
+<footer>
+  <div class="box">
+    <select id="mode" title="Режим відповіді">
+      <option value="chat">💬 Чат</option>
+      <option value="plan">🗺 План</option>
+    </select>
+    <textarea id="inp" rows="1" placeholder="Напиши запит і натисни Enter…"></textarea>
+    <button id="mic" class="mic" title="Голосовий ввід (українська)">🎤</button>
+    <button id="send">Надіслати</button>
+  </div>
+  <div class="hint">Enter — надіслати, Shift+Enter — новий рядок. Відповідає Qwen на Kaggle через локальний міст (127.0.0.1:11434).</div>
+</footer>
+<script>
+const $=id=>document.getElementById(id);
+const log=$("log"), inp=$("inp"), send=$("send"), banner=$("banner");
+let model="qwen3-coder:30b", busy=false;
+const history=[];                      // {role, content} для контексту
+
+function setDot(el,cls,title){el.className="dot "+(cls||"");el.parentElement.title=title||""}
+
+// ---- розігрів: стартовий екран з кнопкою, таймером і прогресом (~6 хв) ----
+const WARM_ETA=360;                    // секунд: орієнтовний час старту ядра (5-7 хв)
+let warmStarted=0, warmDismissed=false, warmError="";
+try{warmStarted=+localStorage.getItem("warmStart")||0}catch(_){}
+function saveWarm(t){warmStarted=t;try{t?localStorage.setItem("warmStart",String(t)):localStorage.removeItem("warmStart")}catch(_){}}
+const mmss=s=>{s=Math.max(0,Math.round(s));return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0")};
+async function gwStatus(){
+  try{const r=await fetch("/kagent/status",{cache:"no-store"});if(!r.ok)return null;return await r.json()}catch(_){return null}
+}
+function renderWarm(state,g){
+  // state: "online" | "offline" | "starting"
+  const w=$("warm");
+  if(state==="online"){w.classList.remove("show");saveWarm(0);warmDismissed=false;warmError="";return}
+  const starting=(state==="starting");
+  if(starting&&!warmStarted)saveWarm(Date.now());
+  if(!starting&&warmStarted&&Date.now()-warmStarted>20000)saveWarm(0);   // запуск не підхопився
+  const showIt=(starting||state==="offline")&&!warmDismissed;
+  w.classList.toggle("show",showIt);
+  $("warmBtn").style.display=starting?"none":"block";
+  $("warmBtn").disabled=false;
+  $("warmBar").style.display=starting?"block":"none";
+  $("warmTime").style.display=starting?"block":"none";
+  $("warmLog").style.display=starting?"block":"none";
+  $("warmTitle").textContent=starting?"🔥 Розігріваю модель…":"💤 Модель спить";
+  $("warmText").textContent=starting
+    ?"Kaggle піднімає GPU, завантажує Qwen і відкриває тунель. Не закривай цю сторінку."
+    :"Qwen на Kaggle вимкнена, щоб не витрачати квоту GPU. Розігрів займає близько шести хвилин.";
+  if(starting){
+    const el=(Date.now()-(warmStarted||Date.now()))/1000;
+    $("warmTime").textContent=mmss(el)+" / ~"+mmss(WARM_ETA);
+    $("warmFill").style.width=Math.min(95,el/WARM_ETA*100)+"%";
+    const lines=(g&&g.start_log)||[];
+    $("warmLog").textContent=lines.slice(-4).join("\n");
+    $("warmState").textContent=el>WARM_ETA*1.6?"Довше, ніж зазвичай: черга Kaggle або велика модель. Чекаю далі.":"Йде запуск…";
+  }else{
+    $("warmState").textContent=warmError;
+  }
+}
+async function warmUp(){
+  warmError="";$("warmBtn").disabled=true;$("warmState").textContent="Надсилаю запит на запуск…";
+  try{
+    const r=await fetch("/kagent/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model})});
+    if(!r.ok){warmError="Шлюз відмовив ("+r.status+"). Спробуй ще раз.";$("warmBtn").disabled=false;$("warmState").textContent=warmError;return}
+    saveWarm(Date.now());warmDismissed=false;
+  }catch(e){warmError="Немає зв'язку зі шлюзом: "+e;$("warmBtn").disabled=false;$("warmState").textContent=warmError;return}
+  poll();
+}
+$("warmBtn").onclick=warmUp;
+$("warmHide").onclick=()=>{warmDismissed=true;$("warm").classList.remove("show")};
+setInterval(()=>{ if($("warm").classList.contains("show")&&$("warmTime").style.display==="block") poll(); },3000);
+
+async function poll(){
+  try{
+    const s=await (await fetch("/__bridge/status",{cache:"no-store"})).json();
+    const g=await gwStatus();
+    setDot($("d-bridge"),"ok","міст працює");
+    if(s.model){model=s.model;$("model").textContent=s.model}
+    const gk=g&&g.kernel;                       // online | offline | starting (від шлюзу)
+    if(gk==="starting"){
+      setDot($("d-gw"),"ok","шлюз ок");setDot($("d-kernel"),"warn","ядро запускається");
+      banner.style.display="none";renderWarm("starting",g);return;
+    }
+    if(s.kernel==="online"){
+      setDot($("d-gw"),"ok","шлюз і інтернет ок");
+      setDot($("d-kernel"),"ok","ядро онлайн");
+      banner.style.display="none";renderWarm("online",g);
+    }else if(s.kernel==="offline"){
+      setDot($("d-gw"),"ok","шлюз ок");
+      setDot($("d-kernel"),"warn","ядро спить");
+      banner.style.display="none";renderWarm(gk==="starting"?"starting":"offline",g);
+    }else if(s.kernel==="unreachable"){
+      setDot($("d-gw"),"bad","шлюз/інтернет недоступні");
+      setDot($("d-kernel"),"bad","");
+      showBanner("⚠ Немає зв'язку зі шлюзом (інтернет/VPN?). "+(s.detail||""));
+    }else{
+      setDot($("d-gw"),"warn",s.detail||"");
+      setDot($("d-kernel"),"warn",s.detail||"");
+      showBanner("⚠ "+(s.detail||("стан: "+s.kernel)));
+    }
+  }catch(e){
+    setDot($("d-bridge"),"bad","міст не відповідає");
+    setDot($("d-gw"),"","");setDot($("d-kernel"),"","");
+    showBanner("⚠ Міст не відповідає. Запусти start_bridge.bat і лиши вікно відкритим.");
+  }
+}
+function showBanner(html){banner.innerHTML=html;banner.style.display="block"}
+
+function addRow(role,text){
+  const row=document.createElement("div");row.className="row "+role;
+  const b=document.createElement("div");b.className="bubble";b.textContent=text;
+  row.appendChild(b);log.appendChild(row);log.scrollTop=log.scrollHeight;return b;
+}
+
+async function ask(){
+  const text=inp.value.trim();
+  if(!text||busy)return;
+  busy=true;send.disabled=true;inp.value="";inp.style.height="auto";
+  addRow("me",text);history.push({role:"user",content:text});
+  const b=addRow("bot","");b.classList.add("think");b.textContent="…";
+  let acc="";
+  try{
+    const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model,messages:withMode(history),stream:true})});
+    if(r.status===503){b.classList.remove("think");b.textContent="💤 Модель спить — натисни «Розігріти» і повтори запит, коли вона прокинеться.";poll();busy=false;send.disabled=false;return}
+    if(!r.ok){b.classList.remove("think");b.textContent="Помилка "+r.status;busy=false;send.disabled=false;return}
+    const reader=r.body.getReader(),dec=new TextDecoder();let buf="";
+    for(;;){
+      const {value,done}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      let nl;while((nl=buf.indexOf("\n"))>=0){
+        const line=buf.slice(0,nl).trim();buf=buf.slice(nl+1);
+        if(!line)continue;
+        try{const j=JSON.parse(line);const c=(j.message&&j.message.content)||"";
+          if(c){acc+=c;b.classList.remove("think");b.textContent=acc;log.scrollTop=log.scrollHeight}}catch(_){}
+      }
+    }
+    history.push({role:"assistant",content:acc});
+  }catch(e){b.classList.remove("think");b.textContent="Збій зв'язку: "+e}
+  busy=false;send.disabled=false;inp.focus();
+}
+
+// ---- режими: «План» додає системну інструкцію лише до запиту, в історію вона не потрапляє ----
+const PLAN_PROMPT="Режим планування. Не пиши готовий код і не вигадуй, що щось уже виконано. "+
+  "Відповідай пронумерованим планом кроків, для кожного кроку вкажи файли/команди, ризики й що перевірити. "+
+  "Якщо бракує даних — спершу перелічи уточнювальні питання. Відповідай мовою користувача.";
+function withMode(h){return $("mode").value==="plan"?[{role:"system",content:PLAN_PROMPT}].concat(h):h}
+
+// ---- голосовий ввід (Web Speech API; Chrome/Edge) ----
+// Увага: браузер надсилає звук у хмарну службу розпізнавання (Google/Microsoft) — це не локально.
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition, mic=$("mic");
+let rec=null,micBase="";
+if(!SR){mic.disabled=true;mic.title="Цей браузер не підтримує голосовий ввід (потрібен Chrome або Edge)"}
+else mic.onclick=()=>{
+  if(rec){rec.stop();return}
+  rec=new SR();rec.lang="uk-UA";rec.interimResults=true;rec.continuous=true;micBase=inp.value?inp.value+" ":"";
+  rec.onresult=e=>{let t="";for(let i=0;i<e.results.length;i++)t+=e.results[i][0].transcript;
+    inp.value=micBase+t;inp.dispatchEvent(new Event("input"))};
+  rec.onerror=e=>{banner.textContent="";showBanner("🎤 "+(e.error==="not-allowed"?"Дозволь мікрофон для цієї сторінки.":"Помилка розпізнавання: "+e.error))};
+  rec.onend=()=>{rec=null;mic.classList.remove("on");inp.focus()};
+  rec.start();mic.classList.add("on");
+};
+
+send.onclick=ask;
+inp.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();ask()}});
+inp.addEventListener("input",()=>{inp.style.height="auto";inp.style.height=Math.min(160,inp.scrollHeight)+"px"});
+poll();setInterval(poll,5000);inp.focus();
+</script>
+</body>
+</html>

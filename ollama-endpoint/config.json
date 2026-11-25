@@ -1,0 +1,17 @@
+{
+  "listen_host": "127.0.0.1",
+  "listen_port": 11434,
+
+  "url_source_mode": "kagent-gateway",
+  "gateway_config": null,
+
+  "refresh_seconds": 30,
+  "upstream_timeout": 1800,
+  "connect_timeout": 15,
+
+  "verify_tls": true,
+  "upstream_cafile": null,
+  "log_file": "bridge.log",
+
+  "_comment": "kagent-gateway: міст читає ~/.config/kagent/config.json (url+key+ca) наявного kagent-gateway на vps-nl і проксіює крізь нього на Kaggle (обхід блокування Cloudflare в локальній мережі). Спершу підніми модель: python <...>/claude-kaggle-bridge/tools/kaggle_llm.py start. Якщо ядро offline, шлюз віддає 503. Інші режими: kaggle-llm (прямий endpoint.json, якщо мережа пускає trycloudflare) | pinned | file | registry."
+}
