@@ -57,3 +57,8 @@ Claude ──MCP (stdio)──> bridge/qwen_mcp.py ──HTTPS──> Cloudflare
 - **Дані йдуть на Kaggle** (сервери третьої сторони) через тунель Cloudflare. Не надсилай моделі секрети й чутливі дані.
 - Адреса тунелю нова при кожному старті ядра; журнал ядра містить токен, тому ядро має лишатись приватним.
 - Деякі мережі блокують `*.trycloudflare.com` — [docs/04-blocked-network.md](docs/04-blocked-network.md).
+
+## ollama-endpoint/
+
+Локальний Ollama/OpenAI-сумісний endpoint поверх Qwen у Kaggle: опис в ollama-endpoint/README.md.
+Перенесено з `mstekh/kaggle-ollama-bridge` разом з історією комітів (2026-11-25). Нові зміни вносити тут, а не в старому репозиторії.
